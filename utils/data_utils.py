@@ -1,12 +1,11 @@
+from __future__ import print_function
 __author__ = 'rogerjiang'
 
-'''
+"""
 Purposes:
 1. Visualization of training data
 2. Evaluation of training data augmentation
 
-'''
-'''
 Notes on the data files:
 
 train_wkt_v4.csv: training labels with ImageId, ClassType, MultipolygonWKT
@@ -28,9 +27,7 @@ If the order of dimension in all the image data is x-y, this order is switched
 to y-x in grid_sizes and wkt data from train_wkt_v4.
 
 -------------
-'''
 
-'''
 Basically, the combination of ClassType and MultipolygonWKT gives the voxel-wise 
 class labels.
 
@@ -44,7 +41,7 @@ coordinate with the grid_size (Xmax, Ymin)
 There is slightly mismatch between the three_band and sixteen_band data due to 
 delay in measurements, such that they should be aligned.
 
-'''
+"""
 
 import tifffile
 import shapely.wkt as wkt
@@ -64,21 +61,19 @@ import sys
 import seaborn as sns
 import os
 
-
 data_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 
-
 CLASSES = {
-    1: 'Bldg',
+    1: 'Buildings',
     2: 'Struct',
     3: 'Road',
     4: 'Track',
     5: 'Trees',
     6: 'Crops',
-    7: 'Fast H2O',
-    8: 'Slow H2O',
-    9: 'Truck',
-    10: 'Car',
+    7: 'Waterway',
+    8: 'Standing water',
+    9: 'Vehicle Large',
+    10: 'Vehicle Small'
 }
 
 COLORS = {
@@ -111,16 +106,16 @@ ZORDER = {
 # train_wkt_v4.csv stores the polygon data for all images and classes. The polygons
 # uses relative coordinate positions.
 _df = pd.read_csv(data_dir + '/data/train_wkt_v4.csv',
-                  names=['ImageId', 'ClassId', 'MultipolygonWKT'], skiprows = 1)
+                  names=['ImageId', 'ClassId', 'MultipolygonWKT'], skiprows=1)
 
 # grid_sizes.csv stores the relative size of for each image. The origin is at the
 # upper left corner, which means Xmax is positive and Ymin is negative.
 _df1 = pd.read_csv(data_dir + '/data/grid_sizes.csv',
-                   names = ['ImageId', 'Xmax', 'Ymin'], skiprows = 1)
+                   names=['ImageId', 'Xmax', 'Ymin'], skiprows=1)
 
 # sample_submission.csv is the file for submission
 _df2 = pd.read_csv(data_dir + '/data/sample_submission.csv',
-                  names=['ImageId', 'ClassId', 'MultipolygonWKT'], skiprows = 1)
+                  names=['ImageId', 'ClassId', 'MultipolygonWKT'], skiprows=1)
 
 # Two of the training images were photoed at the same spot at different times,
 # under different weather condition. It's up to you to decide whether to
@@ -142,29 +137,27 @@ test_IDs_dict = dict(zip(np.arange(len(all_test_names)), all_test_names))
 test_IDs_dict_r = dict(zip(all_test_names, np.arange(len(all_test_names))))
 
 
-
 def resize(im, shape_out):
-    '''
+    """
     Resize an image using cv2.
     Note: x and y are switched in cv2.resize
     :param im:
     :param shape_out:
     :return:
-    '''
+    """
     return cv2.resize(im, (shape_out[1], shape_out[0]),
                       interpolation=cv2.INTER_CUBIC)
 
 
-
 def affine_transform(img, warp_matrix, out_shape):
-    '''
+    """
     Apply affine transformation using warp_matrix to img, and perform
     interpolation as needed
     :param img:
     :param warp_matrix:
     :param out_shape:
     :return:
-    '''
+    """
     new_img = cv2.warpAffine(img, warp_matrix, (out_shape[1], out_shape[0]),
                              flags = cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
                              borderMode= cv2.BORDER_REPLICATE)
@@ -172,15 +165,14 @@ def affine_transform(img, warp_matrix, out_shape):
     return new_img
 
 
-
 def get_polygon_list(image_id, class_type):
-    '''
+    """
     Load the wkt data (relative coordiantes of polygons) from csv file and
     returns a list of polygons (in the format of shapely multipolygon)
     :param image_id:
     :param class_type:
     :return:
-    '''
+    """
     all_polygon = train_wkt_v4[train_wkt_v4.ImageId == image_id]
     polygon = all_polygon[all_polygon.ClassId == class_type].MultipolygonWKT
     # For empty polygon, polygon is a string of 'MULTIPOLYGON EMPTY'
@@ -191,15 +183,14 @@ def get_polygon_list(image_id, class_type):
     return polygon_list
 
 
-
 def convert_coordinate_to_raster(coords, img_size, xymax):
-    '''
+    """
     Converts the relative coordinates of contours into raster coordinates.
     :param coords:
     :param img_size:
     :param xymax:
     :return:
-    '''
+    """
     xmax, ymax = xymax
     width, height = img_size
 
@@ -211,16 +202,15 @@ def convert_coordinate_to_raster(coords, img_size, xymax):
     return coords
 
 
-
 def generate_contours(polygon_list, img_size, xymax):
-    '''
+    """
     Convert shapely MultipolygonWKT type of data (relative coordinate) into
     list type of date for polygon raster coordinates
     :param polygon_list:
     :param img_size:
     :param xymax:
     :return:
-    '''
+    """
     if len(polygon_list) == 0:
         return [], []
 
@@ -236,16 +226,15 @@ def generate_contours(polygon_list, img_size, xymax):
     return perim_list, inter_list
 
 
-
 def generate_mask_from_contours(img_size, perim_list, inter_list, class_id = 1):
-    '''
+    """
     Create pixel-wise mask from contours from polygon of raster coordinates
     :param img_size:
     :param perim_list:
     :param inter_list:
     :param class_id:
     :return:
-    '''
+    """
     mask = np.zeros(img_size, np.uint8)
 
     if perim_list is None:
@@ -259,10 +248,8 @@ def generate_mask_from_contours(img_size, perim_list, inter_list, class_id = 1):
     return mask
 
 
-
-
-def plot_polygon(polygon_list, ax, scaler = None, alpha = 0.7):
-    '''
+def plot_polygon(polygon_list, ax, scaler=None, alpha=0.7):
+    """
     polygon_list is a dictionary of polygon list for all class types.
     key is the class id, and value is the polygon list.
     :param polygon_list:
@@ -270,39 +257,34 @@ def plot_polygon(polygon_list, ax, scaler = None, alpha = 0.7):
     :param scaler:
     :param alpha:
     :return:
-    '''
+    """
     legend_list = []
     for cl in CLASSES:
         # Patch is a function in the matplotlib.patches module
         legend_list.append(Patch(
-            color = COLORS[cl],
-            label = '{}: ({})'.format(CLASSES[cl], len(polygon_list[cl]))))
+            color=COLORS[cl],
+            label='{}: ({})'.format(CLASSES[cl], len(polygon_list[cl]))))
 
         for polygon in polygon_list[cl]:
             if scaler is not None:
                 # affinity is a function from shapely
-                polygon_rescale = affinity.scale(polygon, xfact = scaler[1],
-                                                 yfact = scaler[0],
-                                                 origin = [0., 0., 0.])
+                polygon_rescale = affinity.scale(polygon, xfact=scaler[1],
+                                                 yfact=scaler[0],
+                                                 origin=[0., 0., 0.])
             else:
                 polygon_rescale = polygon
             # PolygonPatch is a function from descartes.patch module
             # polygon_list is in relative coordinates and they are
             # generated from get_polygon_list and are further
             # converted to raster coordinates through scaler.
-            patch = PolygonPatch(polygon = polygon_rescale, color = COLORS[cl],
-                                 lw = 0, alpha = alpha, zorder = ZORDER[cl])
+            patch = PolygonPatch(polygon=polygon_rescale, color=COLORS[cl],
+                                 lw=0, alpha=alpha, zorder=ZORDER[cl])
             ax.add_patch(patch)
-    ax.autoscale_view()
-    ax.set_title('Objects')
-    ax.set_xticks([])
-    ax.set_yticks([])
     return legend_list
 
 
-
-def plot_image(img, ax, image_id, image_key, selected_channel = None):
-    '''
+def plot_image(img, ax, image_id, image_key, selected_channel=None):
+    """
     Plot an selected channels of img into ax.
     :param img:
     :param ax:
@@ -310,24 +292,23 @@ def plot_image(img, ax, image_id, image_key, selected_channel = None):
     :param image_key:
     :param selected_channel:
     :return:
-    '''
+    """
     title_suffix = ''
     if selected_channel is not None:
         img = img[:, :, selected_channel]
         title_suffix = '(' + ','.join(repr(i) for i in selected_channel) + ')'
     ax.imshow(img)
-    ax.set_title(image_id + '-' + image_key + title_suffix)
-    ax.set_xlabel(img.shape[0])
-    ax.set_ylabel(img.shape[1])
+    #ax.set_title(image_id + '-' + image_key + title_suffix)
+    #ax.set_xlabel(img.shape[0])
+    #ax.set_ylabel(img.shape[1])
     ax.set_xticks([])
     ax.set_yticks([])
 
 
-
-def plot_overlay(img, ax, image_id, image_key, polygon_list, scaler = [1., 1.],
-                 x_range = None, y_range = None, label = None, alpha = 1.0,
-                 rgb = False):
-    '''
+def plot_overlay(img, ax, image_id, image_key, polygon_list, scaler=(1., 1.),
+                 x_range=None, y_range=None, label=None, alpha=1.0,
+                 rgb=False):
+    """
     Plot image with polygon overlays
     :param img:
     :param ax:
@@ -336,31 +317,32 @@ def plot_overlay(img, ax, image_id, image_key, polygon_list, scaler = [1., 1.],
     :param polygon_list:
     :param scaler:
     :return:
-    '''
+    """
     # cm is a function from matplotlib
     if not x_range:
         x_range = [0, img.shape[0]]
     if not y_range:
         y_range = [0, img.shape[1]]
     if rgb:
-        ax.imshow(scale_percentile(img), vmax=1., vmin=0.)
+        ax.imshow(img, vmax=1., vmin=0.)
     else:
         ax.imshow(scale_percentile(rgb2gray(img)),
-                  cmap = cm.gray, vmax = 1., vmin = 0.)
-    ax.set_xlabel(x_range[1] - x_range[0])
-    ax.set_ylabel(y_range[1] - y_range[0])
-    legend = plot_polygon(polygon_list, ax, scaler, alpha = alpha)
-    ax.set_title(image_id + '-' + image_key + '-Overlay')
+                  cmap=cm.gray, vmax=1., vmin=0.)
+    #ax.set_xlabel(x_range[1] - x_range[0])
+    #ax.set_ylabel(y_range[1] - y_range[0])
+    legend = plot_polygon(polygon_list, ax, scaler, alpha=alpha)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    #ax.set_title(image_id + '-' + image_key + '-Overlay')
     return legend
 
 
-
 def scale_percentile(img):
-    '''
+    """
     Scale an image's 1 - 99 percentiles into 0 - 1 for display
     :param img:
     :return:
-    '''
+    """
     orig_shape = img.shape
     if len(orig_shape) == 3:
         img = np.reshape(img,
@@ -368,35 +350,33 @@ def scale_percentile(img):
                          ).astype(np.float32)
     elif len(orig_shape) == 2:
         img = np.reshape(img, [orig_shape[0] * orig_shape[1]]).astype(np.float32)
-    mins = np.percentile(img, 1, axis = 0)
-    maxs = np.percentile(img, 99, axis = 0) - mins
+    mins = np.percentile(img, 1, axis=0)
+    maxs = np.percentile(img, 99, axis=0) - mins
 
     img = (img - mins) / maxs
 
-    img.clip(0., 1.)
+    img.clip(0, 1, out=img)
     img = np.reshape(img, orig_shape)
 
     return img
 
 
-
 def rgb2gray(rgb):
-    '''
+    """
     Converts rgb images to grey scale images
     :param rgb:
     :return:
-    '''
+    """
     return np.dot(rgb[..., :3], [0.299, 0.587, 0.144])
 
 
-
 def crop(img, crop_coord):
-    '''
+    """
     Crop out an patch from img, given the coordinates
     :param img:
     :param crop_coord:
     :return:
-    '''
+    """
     width, height = img.shape[0], img.shape[1]
     x_lim = crop_coord[0].astype(np.int)
     y_lim = crop_coord[1].astype(np.int)
@@ -407,26 +387,24 @@ def crop(img, crop_coord):
     return img[x_lim[0]: x_lim[1], y_lim[0]: y_lim[1]]
 
 
-
 def get_image_area(image_id):
-    '''
+    """
     Calculate the area of an image
     :param image_id:
     :return:
-    '''
+    """
     xmax = grid_sizes[grid_sizes.ImageId == image_id].Xmax.values[0]
     ymin = grid_sizes[grid_sizes.ImageId == image_id].Ymin.values[0]
 
     return abs(xmax * ymin)
 
 
-
 def image_stat(image_id):
-    '''
+    """
     Return the statistics ofd an image as a pd dataframe
     :param image_id:
     :return:
-    '''
+    """
     counts, total_area, mean_area, std_area = {}, {}, {}, {}
     img_area = get_image_area(image_id)
 
@@ -446,12 +424,11 @@ def image_stat(image_id):
                          'STDArea': std_area})
 
 
-
 def collect_stats():
-    '''
+    """
     Collect the area statistics for all images and concatenate them
     :return:
-    '''
+    """
     stats = []
     total_no = len(all_train_names) - 1
 
@@ -468,12 +445,11 @@ def collect_stats():
     return pd.concat(stats)
 
 
-
 def calculate_class_weights():
-    '''
+    """
 
     :return: class-wise true-label-area / false-label-area as a dictionary
-    '''
+    """
     df = collect_stats()
     df = df.fillna(0)
     df = df.pivot(index = 'Class', columns = 'ImageId', values = 'TotalArea')
@@ -482,14 +458,13 @@ def calculate_class_weights():
     return df.to_dict()
 
 
-
 def plot_stats(value, title):
-    '''
+    """
     Plot 2D grid plot of statistics of MeanArea, Counts, TotalArea, STDArea.
     :param value:
     :param title:
     :return:
-    '''
+    """
     stats = collect_stats()
     pvt = stats.pivot(index='Class', columns='ImageId', values = value)
     pvt.fillna(0., inplace = True)
@@ -505,7 +480,6 @@ def plot_stats(value, title):
     ax.set_title(title)
 
     fig.colorbar(im)
-
 
 
 def plot_bar_stats():
@@ -531,14 +505,13 @@ def plot_bar_stats():
     ax.set_xticklabels(perc_area.columns, rotation = -60)
 
 
-
 def jaccard_index(mask_1, mask_2):
-    '''
+    """
     Calculate jaccard index between two masks
     :param mask_1:
     :param mask_2:
     :return:
-    '''
+    """
     assert len(mask_1.shape) == len(mask_2.shape) == 2
     assert 0 <= np.amax(mask_1) <=1
     assert 0 <= np.amax(mask_2) <=1
@@ -553,15 +526,14 @@ def jaccard_index(mask_1, mask_2):
     return intersection / union
 
 
-
-def mask_to_polygons(mask, img_id, epsilon = 1, min_area = 1., test = True):
-    '''
+def mask_to_polygons(mask, img_id, epsilon=1, min_area=1., test=True):
+    """
     Generate polygons from mask
     :param mask:
     :param epsilon:
     :param min_area:
     :return:
-    '''
+    """
     # find contours, cv2 switches the x-y coordiante of mask to y-x in contours
     # This matches the wkt data in train_wkt_v4, which is desirable for submission
     image, contours, hierarchy = cv2.findContours(
@@ -614,23 +586,20 @@ def mask_to_polygons(mask, img_id, epsilon = 1, min_area = 1., test = True):
     return scaled_pred_polygons
 
 
-
 def polygon_jaccard(final_polygons, train_polygons):
-    '''
+    """
     Calcualte the jaccard index of two polygons, based on data type of
     shapely.geometry.MultiPolygon
     :param final_polygons:
     :param train_polygons:
     :return:
-    '''
+    """
     return final_polygons.intersection(train_polygons).area /\
     final_polygons.union(train_polygons).area
 
 
-
-class ImageData():
-
-    def __init__(self, image_id, phase = 'train'):
+class ImageData:
+    def __init__(self, image_id, phase='train'):
 
         self.image_id = train_IDs_dict[image_id] \
             if phase == 'train' else test_IDs_dict[image_id]
@@ -648,16 +617,15 @@ class ImageData():
     def load_pre_mask(self):
         self.pred_mask = None
 
-
     def load_image(self):
-        '''
+        """
         Load three band and sixteen band images, registered and at the same
         resolution
         Assign value for image_size
         :return:
-        '''
+        """
         im = self.image_stack()
-        self.three_band_image = im[..., 0: 3]
+        self.three_band_image = im[..., 0:3]
         self.sixteen_band_image = im[..., 3:]
         self.image = im
         self.image_size = np.shape(im)[0: 2]
@@ -666,12 +634,11 @@ class ImageData():
 
         self._xymax = [xmax, ymax]
 
-
     def get_image_path(self):
-        '''
+        """
         Returns the paths for all images
         :return:
-        '''
+        """
         return {
             '3': '{}/data/three_band/{}.tif'.format(data_dir, self.image_id),
             'A': '{}/data/sixteen_band/{}_A.tif'.format(data_dir, self.image_id),
@@ -679,12 +646,11 @@ class ImageData():
             'P': '{}/data/sixteen_band/{}_P.tif'.format(data_dir, self.image_id)
         }
 
-
     def read_image(self):
-        '''
+        """
         Read all original images
         :return:
-        '''
+        """
         images = {}
         path = self.get_image_path()
 
@@ -700,7 +666,7 @@ class ImageData():
         imm = images['M']
         imp = images['P']
 
-        [nx, ny, _] = im3.shape
+        nx, ny, _ = im3.shape
 
         images['A'] = resize(ima, [nx, ny])
         images['M'] = resize(imm, [nx, ny])
@@ -708,12 +674,11 @@ class ImageData():
 
         return images
 
-
     def image_stack(self):
-        '''
+        """
         Resample all images to highest resolution and align all images
         :return:
-        '''
+        """
 
         images = self.read_image()
 
@@ -738,16 +703,15 @@ class ImageData():
         ima = affine_transform(ima, warp_matrix_a, [nx, ny])
         imm = affine_transform(imm, warp_matrix_m, [nx, ny])
 
-        im = np.concatenate((im3, ima, imm, imp), axis = -1)
+        im = np.concatenate((im3, ima, imm, imp), axis=-1)
 
         return im
 
-
     def create_label(self):
-        '''
+        """
         Create the class labels
         :return:
-        '''
+        """
         if self.image is None:
             self.load_image()
         labels = np.zeros(np.append(self.image_size, len(CLASSES)), np.uint8)
@@ -761,12 +725,11 @@ class ImageData():
             labels[..., cl - 1] = mask
         self.label = labels
 
-
     def create_train_feature(self):
-        '''
+        """
         Create synthesized features
         :return:
-        '''
+        """
         if self.three_band_image is None:
             self.load_image()
 
@@ -807,30 +770,29 @@ class ImageData():
 
         self.train_feature = feature
 
-
-    def visualize_image(self, plot_all = True):
-        '''
+    def visualize_image(self, plot_all=True):
+        """
         Visualize all images and class labels
         :param plot_all:
         :return:
-        '''
+        """
         if self.label is None:
             self.create_label()
 
         if not plot_all:
-            fig, axarr = plt.subplots(figsize = [10, 10])
+            fig, axarr = plt.subplots(figsize=[10, 10])
             ax = axarr
         else:
-            fig, axarr = plt.subplots(figsize = [20, 20], ncols = 3, nrows = 3)
+            fig, axarr = plt.subplots(figsize=[20, 20], ncols=3, nrows=3)
             ax = axarr[0][0]
 
         polygon_list = {}
         for cl in CLASSES:
             polygon_list[cl] = get_polygon_list(self.image_id, cl)
-            print '{}: {} \t\tcount = {}'.format(
-                cl, CLASSES[cl], len(polygon_list[cl]))
+            print('{}: {} \t\tcount = {}'.format(
+                cl, CLASSES[cl], len(polygon_list[cl])))
 
-        legend = plot_polygon(polygon_list = polygon_list, ax = ax)
+        legend = plot_polygon(polygon_list=polygon_list, ax=ax)
 
         ax.set_xlim(0, self._xymax[0])
         ax.set_ylim(self._xymax[1], 0)
@@ -843,38 +805,37 @@ class ImageData():
             plot_image(three_band_rescale, axarr[0][1], self.image_id, '3')
             plot_overlay(three_band_rescale, axarr[0][2], self.image_id, '3',
                          polygon_list,
-                         scaler = self.image_size / np.array([self._xymax[1],
-                                                              self._xymax[0]]))
+                         scaler=self.image_size / np.array([self._xymax[1],
+                                                            self._xymax[0]]))
             axarr[0][2].set_ylim(self.image_size[0], 0)
             axarr[0][2].set_xlim(0, self.image_size[1])
             plot_image(sixteen_band_rescale, axarr[1][0], self.image_id, 'A',
-                       selected_channel = [0, 3, 6])
+                       selected_channel=[0, 3, 6])
             plot_image(sixteen_band_rescale, axarr[1][1], self.image_id, 'A',
-                       selected_channel = [1, 4, 7])
+                       selected_channel=[1, 4, 7])
             plot_image(sixteen_band_rescale, axarr[1][2], self.image_id, 'A',
-                       selected_channel = [2, 5, 0])
+                       selected_channel=[2, 5, 0])
             plot_image(sixteen_band_rescale, axarr[2][0], self.image_id, 'M',
-                       selected_channel = [8, 11, 14])
+                       selected_channel=[8, 11, 14])
             plot_image(sixteen_band_rescale, axarr[2][1], self.image_id, 'M',
-                       selected_channel = [9, 12, 15])
+                       selected_channel=[9, 12, 15])
             plot_image(sixteen_band_rescale, axarr[2][2], self.image_id, 'M',
-                       selected_channel = [10, 13, 8])
+                       selected_channel=[10, 13, 8])
 
         ax.legend(handles = legend,
-                  bbox_to_anchor = (0.9, 0.95),
-                  bbox_transform = plt.gcf().transFigure,
-                  ncol = 5,
-                  fontsize = 'large',
-                  title = 'Objects-' + self.image_id,
-                  framealpha = 0.3)
+                  bbox_to_anchor=(0.9, 0.95),
+                  bbox_transform=plt.gcf().transFigure,
+                  ncol=5,
+                  fontsize='large',
+                  title='Objects-' + self.image_id,
+                  framealpha=0.3)
 
-
-    def visualize_label(self, x_range = None, y_range = None, alpha = 1.0):
-        '''
+    def visualize_label(self, x_range=None, y_range=None, alpha=1.0):
+        """
         Visualize labels
         :param plot_all:
         :return:
-        '''
+        """
         if self.label is None:
             self.create_label()
 
@@ -883,35 +844,34 @@ class ImageData():
         if not y_range:
             y_range = [0, self.image_size[1]]
 
-        fig, ax= plt.subplots(figsize = [10, 10])
+        fig, axarr = plt.subplots(figsize=[13, 7], ncols=2, nrows=1)
 
         polygon_list = {}
         for cl in CLASSES:
             polygon_list[cl] = get_polygon_list(self.image_id, cl)
-            print '{}: {} \t\tcount = {}'.format(
-                cl, CLASSES[cl], len(polygon_list[cl]))
+            print('{}: {} \t\tcount = {}'.format(
+                cl, CLASSES[cl], len(polygon_list[cl])))
 
         three_band_rescale = scale_percentile(self.three_band_image)
+        ax = axarr[0]
+        ax.imshow(three_band_rescale, vmax=1., vmin=0.)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        ax = axarr[1]
         legend = plot_overlay(
-            three_band_rescale, ax, self.image_id, 'P',polygon_list,
+            three_band_rescale, ax, self.image_id, 'P', polygon_list,
             scaler=self.image_size / np.array([self._xymax[1], self._xymax[0]]),
-            alpha = alpha, rgb = True)
+            alpha=alpha, rgb=True)
 
-        ax.set_xlim(x_range[0], x_range[1])
-        ax.set_ylim(y_range[0], y_range[1])
-        ax.set_xlabel(x_range[1] - x_range[0])
-        ax.set_ylabel(x_range[1] - x_range[0])
+        ax.legend(handles=legend,
+                  bbox_to_anchor=(0.83, 0.92),
+                  bbox_transform=plt.gcf().transFigure,
+                  ncol=5,
+                  framealpha=0.3)
+        plt.suptitle('Objects-' + self.image_id)
 
-        ax.legend(handles = legend,
-                  bbox_to_anchor = (0.95, 0.99),
-                  bbox_transform = plt.gcf().transFigure,
-                  ncol = 5,
-                  fontsize = 'large',
-                  title = 'Objects-' + self.image_id,
-                  framealpha = 0.3)
-
-
-    def apply_crop(self, patch_size, ref_point = [0, 0], method = 'random'):
+    def apply_crop(self, patch_size, ref_point=(0, 0), method='random'):
 
         if self.image is None:
             self.load_image()
@@ -940,3 +900,16 @@ class ImageData():
             raise NotImplementedError(
                 '"method" should either be "random" or "grid"')
         self.crop_image = crop(self.image, crop_area)
+
+
+if __name__ == '__main__':
+    img_data = ImageData(0)
+
+    # load data
+    img_data.load_image()
+    img_data.create_label()
+    #img_data.create_train_feature()
+
+    # visualize
+    img_data.visualize_label(alpha=0.7)
+    plt.show()
